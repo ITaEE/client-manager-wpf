@@ -1,0 +1,194 @@
+<Window x:Class="Portfolio.ClientManager.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Client Manager"
+        Width="1120"
+        Height="680"
+        MinWidth="920"
+        MinHeight="560"
+        PreviewKeyDown="OnPreviewKeyDown"
+        WindowStartupLocation="CenterScreen">
+    <Window.InputBindings>
+        <KeyBinding Key="N" Command="{Binding AddCommand}" Modifiers="Control" />
+    </Window.InputBindings>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="80" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="46" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="{StaticResource NavyBrush}" Padding="28,0">
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock FontSize="24" FontWeight="SemiBold" Foreground="White" Text="Client Manager" />
+                <TextBlock Margin="0,3,0,0" Foreground="#BFD0E0" Text="Local customer database" />
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="24,20,24,14">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock FontWeight="SemiBold" Text="Client records" />
+                    <TextBlock Margin="0,2,0,0"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               Text="Manage contacts, status, and notes" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Margin="0,0,8,0"
+                            Command="{Binding AddCommand}"
+                            Content="+  Add Client"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            ToolTip="Add a new client (Ctrl+N)" />
+                    <Button Margin="0,0,8,0"
+                            Command="{Binding ImportCommand}"
+                            Content="Import CSV"
+                            Style="{StaticResource ToolbarButtonStyle}" />
+                    <Button Command="{Binding ExportCommand}"
+                            Content="Export CSV"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            ToolTip="Exports the current search and status result" />
+                </StackPanel>
+            </Grid>
+
+            <Border Grid.Row="1"
+                    Padding="14"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="7">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="190" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="1" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="SearchBox"
+                             Grid.Column="0"
+                             Margin="0,0,12,0"
+                             Style="{StaticResource SearchTextBoxStyle}"
+                             Tag="Search by name, phone or email..."
+                             ToolTip="Search by full name, phone, or email (Ctrl+F)"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                    <ComboBox Grid.Column="1"
+                              Margin="0,0,12,0"
+                              DisplayMemberPath="Label"
+                              ItemsSource="{Binding StatusFilters}"
+                              SelectedItem="{Binding SelectedStatusFilter}"
+                              ToolTip="Filter clients by status" />
+                    <Button Grid.Column="2"
+                            Command="{Binding ClearFiltersCommand}"
+                            Content="Clear filters"
+                            Style="{StaticResource CompactButtonStyle}" />
+                    <Border Grid.Column="3"
+                            Margin="14,2"
+                            Background="{StaticResource BorderBrush}" />
+                    <Button Grid.Column="4"
+                            Margin="0,0,8,0"
+                            Command="{Binding EditCommand}"
+                            Content="Edit"
+                            Style="{StaticResource CompactButtonStyle}"
+                            ToolTip="Edit the selected client" />
+                    <Button Grid.Column="5"
+                            Command="{Binding DeleteCommand}"
+                            Content="Delete"
+                            Style="{StaticResource DangerButtonStyle}"
+                            ToolTip="Delete the selected client (Delete)" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="2" Margin="24,0">
+            <DataGrid AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      CanUserReorderColumns="False"
+                      CanUserSortColumns="True"
+                      EnableColumnVirtualization="True"
+                      EnableRowVirtualization="True"
+                      IsReadOnly="True"
+                      ItemsSource="{Binding Clients}"
+                      SelectedItem="{Binding SelectedClient}">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Width="1.7*"
+                                        MinWidth="150"
+                                        Binding="{Binding FullName}"
+                                        ElementStyle="{StaticResource GridTextStyle}"
+                                        Header="Full name"
+                                        SortMemberPath="FullName" />
+                    <DataGridTextColumn Width="1.05*"
+                                        MinWidth="105"
+                                        Binding="{Binding Phone}"
+                                        ElementStyle="{StaticResource GridTextStyle}"
+                                        Header="Phone" />
+                    <DataGridTextColumn Width="1.4*"
+                                        MinWidth="150"
+                                        Binding="{Binding Email}"
+                                        ElementStyle="{StaticResource GridTextStyle}"
+                                        Header="Email" />
+                    <DataGridTextColumn Width="0.85*"
+                                        MinWidth="95"
+                                        Binding="{Binding Status}"
+                                        ElementStyle="{StaticResource GridTextStyle}"
+                                        Header="Status"
+                                        SortMemberPath="Status" />
+                    <DataGridTextColumn Width="1.15*"
+                                        MinWidth="142"
+                                        Binding="{Binding CreatedAt, StringFormat={}{0:dd MMM yyyy HH:mm}}"
+                                        ElementStyle="{StaticResource GridTextStyle}"
+                                        Header="Created"
+                                        SortMemberPath="CreatedAt" />
+                    <DataGridTextColumn Width="1.15*"
+                                        MinWidth="142"
+                                        Binding="{Binding UpdatedAt, StringFormat={}{0:dd MMM yyyy HH:mm}}"
+                                        ElementStyle="{StaticResource GridTextStyle}"
+                                        Header="Updated"
+                                        SortMemberPath="UpdatedAt" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <Border Padding="40"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    IsHitTestVisible="False"
+                    Visibility="{Binding IsListEmpty, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock HorizontalAlignment="Center"
+                               FontSize="19"
+                               FontWeight="SemiBold"
+                               Text="{Binding EmptyStateTitle}" />
+                    <TextBlock Margin="0,8,0,0"
+                               HorizontalAlignment="Center"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               Text="{Binding EmptyStateMessage}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="3" Margin="24,0" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+            <Grid>
+                <TextBlock VerticalAlignment="Center"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           Text="{Binding ClientCountText}" />
+                <TextBlock HorizontalAlignment="Right"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           Text="{Binding StatusText}" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
