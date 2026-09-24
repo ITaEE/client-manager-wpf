@@ -177,6 +177,20 @@
                                Text="{Binding EmptyStateMessage}" />
                 </StackPanel>
             </Border>
+
+            <Border Background="#C8FFFFFF"
+                    Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ProgressBar Width="180"
+                                 Height="5"
+                                 IsIndeterminate="True"
+                                 Style="{StaticResource BusyProgressBarStyle}" />
+                    <TextBlock Margin="0,12,0,0"
+                               HorizontalAlignment="Center"
+                               FontWeight="SemiBold"
+                               Text="{Binding BusyMessage}" />
+                </StackPanel>
+            </Border>
         </Grid>
 
         <Border Grid.Row="3" Margin="24,0" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">

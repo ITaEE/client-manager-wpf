@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Input;
+using Microsoft.Extensions.Logging;
 using Portfolio.ClientManager.App.Commands;
 using Portfolio.ClientManager.App.Services;
 using Portfolio.ClientManager.Core.Csv;
@@ -17,6 +18,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private readonly IClientCsvSerializer _csvSerializer;
     private readonly ICsvFileService _csvFileService;
     private readonly IUserDialogService _dialogService;
+    private readonly ILogger<MainViewModel> _logger;
     private readonly AsyncRelayCommand _addCommand;
     private readonly AsyncRelayCommand _editCommand;
     private readonly AsyncRelayCommand _deleteCommand;
@@ -29,6 +31,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private string _searchText = string.Empty;
     private string _statusText = "Ready";
     private bool _isBusy;
+    private string _busyMessage = "Working...";
     private bool _suppressFilterRefresh;
     private int _displayedClientCount;
     private int _totalClientCount;
@@ -38,13 +41,15 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         IClientImportService clientImportService,
         IClientCsvSerializer csvSerializer,
         ICsvFileService csvFileService,
-        IUserDialogService dialogService)
+        IUserDialogService dialogService,
+        ILogger<MainViewModel> logger)
     {
         _clientService = clientService;
         _clientImportService = clientImportService;
         _csvSerializer = csvSerializer;
         _csvFileService = csvFileService;
         _dialogService = dialogService;
+        _logger = logger;
 
         StatusFilters =
         [
@@ -127,6 +132,12 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
+    public string BusyMessage
+    {
+        get => _busyMessage;
+        private set => SetProperty(ref _busyMessage, value);
+    }
+
     public int DisplayedClientCount
     {
         get => _displayedClientCount;
@@ -190,7 +201,10 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         var input = _dialogService.ShowClientEditor(null);
         if (input is not null)
         {
-            await RunOperationAsync(() => _clientService.CreateAsync(input), "Client added.");
+            await RunOperationAsync(
+                allowPotentialDuplicates => _clientService.CreateAsync(input, allowPotentialDuplicates),
+                "Client added.",
+                "Saving client...");
         }
     }
 
@@ -205,7 +219,10 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         var input = _dialogService.ShowClientEditor(client);
         if (input is not null)
         {
-            await RunOperationAsync(() => _clientService.UpdateAsync(client.Id, input), "Changes saved.");
+            await RunOperationAsync(
+                allowPotentialDuplicates => _clientService.UpdateAsync(client.Id, input, allowPotentialDuplicates),
+                "Changes saved.",
+                "Saving changes...");
         }
     }
 
@@ -217,11 +234,11 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        await RunOperationAsync(async () =>
+        await RunOperationAsync(async _ =>
         {
             await _clientService.DeleteAsync(client.Id);
             return client;
-        }, "Client deleted.");
+        }, "Client deleted.", "Deleting client...");
     }
 
     private async Task ExportClientsAsync()
@@ -235,19 +252,23 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         try
         {
             IsBusy = true;
+            BusyMessage = "Exporting CSV...";
             var clientsToExport = Clients.ToArray();
             var csv = await Task.Run(() => _csvSerializer.Serialize(clientsToExport));
             await _csvFileService.WriteAllTextAsync(path, csv);
             StatusText = $"Exported {clientsToExport.Length} client(s).";
+            _logger.LogInformation("CSV export completed. Exported {ClientCount} clients.", clientsToExport.Length);
             _dialogService.ShowInfo(
                 $"Exported {clientsToExport.Length} client(s) from the current search and status filter.\n\n{path}");
         }
         catch (UnauthorizedAccessException)
         {
+            _logger.LogWarning("CSV export was denied by the file system.");
             ShowFileError("The CSV file could not be written because access was denied.");
         }
         catch (IOException)
         {
+            _logger.LogWarning("CSV export failed because the destination is unavailable.");
             ShowFileError("The CSV file could not be written. Check that the folder is available and the file is not in use.");
         }
         catch (Exception exception)
@@ -271,6 +292,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         try
         {
             IsBusy = true;
+            BusyMessage = "Importing CSV...";
             var contents = await _csvFileService.ReadAllTextAsync(path);
             var readResult = await Task.Run(() => _csvSerializer.Parse(contents));
             if (readResult.Records.Count == 0)
@@ -290,14 +312,21 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             await LoadClientsAsync();
             var message = BuildImportSummary(importResult, readResult.Errors, importResult.Errors);
             StatusText = $"Imported {importResult.ImportedCount} client(s).";
+            _logger.LogInformation(
+                "CSV import completed. Imported {ImportedCount}, skipped {SkippedCount}, errors {ErrorCount}.",
+                importResult.ImportedCount,
+                importResult.SkippedCount + readResult.Errors.Count,
+                importResult.Errors.Count + readResult.Errors.Count);
             _dialogService.ShowInfo(message);
         }
         catch (UnauthorizedAccessException)
         {
+            _logger.LogWarning("CSV import was denied by the file system.");
             ShowFileError("The CSV file could not be read because access was denied.");
         }
         catch (IOException)
         {
+            _logger.LogWarning("CSV import failed because the source is unavailable.");
             ShowFileError("The CSV file could not be read. Check that it still exists and is not in use.");
         }
         catch (Exception exception)
@@ -319,12 +348,30 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         await LoadWithErrorHandlingAsync();
     }
 
-    private async Task RunOperationAsync(Func<Task<Client>> operation, string successMessage)
+    private async Task RunOperationAsync(
+        Func<bool, Task<Client>> operation,
+        string successMessage,
+        string busyMessage)
     {
         try
         {
             IsBusy = true;
-            await operation();
+            BusyMessage = busyMessage;
+            try
+            {
+                await operation(false);
+            }
+            catch (ClientDuplicateException exception)
+            {
+                if (!_dialogService.ConfirmPotentialDuplicate(exception.PotentialDuplicates))
+                {
+                    StatusText = "Save cancelled.";
+                    return;
+                }
+
+                await operation(true);
+            }
+
             await LoadClientsAsync();
             StatusText = successMessage;
         }
@@ -433,6 +480,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
     private void ShowOperationError(Exception exception)
     {
+        _logger.LogError(exception, "Client operation failed.");
         var message = exception switch
         {
             ClientValidationException validationException => string.Join(Environment.NewLine, validationException.Errors.Values),

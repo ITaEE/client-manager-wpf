@@ -30,6 +30,24 @@ public sealed class UserDialogService : IUserDialogService
             MessageBoxResult.No) == MessageBoxResult.Yes;
     }
 
+    public bool ConfirmPotentialDuplicate(IReadOnlyList<Client> potentialDuplicates)
+    {
+        var names = potentialDuplicates
+            .Take(3)
+            .Select(client => $"• {client.FullName}");
+        var remainder = potentialDuplicates.Count > 3
+            ? $"\n• and {potentialDuplicates.Count - 3} more"
+            : string.Empty;
+
+        return MessageBox.Show(
+            Application.Current.MainWindow,
+            $"A client with the same email address or phone number may already exist:\n\n{string.Join("\n", names)}{remainder}\n\nSave this client anyway?",
+            "Potential duplicate",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+    }
+
     public string? SelectCsvImportPath()
     {
         var dialog = new OpenFileDialog

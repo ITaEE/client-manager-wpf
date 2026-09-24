@@ -8,6 +8,8 @@ public interface IUserDialogService
 
     bool ConfirmDelete(Client client);
 
+    bool ConfirmPotentialDuplicate(IReadOnlyList<Client> potentialDuplicates);
+
     string? SelectCsvImportPath();
 
     string? SelectCsvExportPath();

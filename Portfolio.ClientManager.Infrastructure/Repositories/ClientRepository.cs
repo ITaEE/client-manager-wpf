@@ -49,11 +49,53 @@ public sealed class ClientRepository(IDbContextFactory<ClientManagerDbContext> c
             .SingleOrDefaultAsync(client => client.Id == id, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Client>> FindPotentialDuplicatesAsync(
+        Guid? excludedClientId,
+        string? phone,
+        string? email,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedPhone = NormalizeComparisonValue(phone);
+        var normalizedEmail = NormalizeComparisonValue(email);
+        if (normalizedPhone is null && normalizedEmail is null)
+        {
+            return [];
+        }
+
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var query = context.Clients.AsNoTracking().AsQueryable();
+        if (excludedClientId is not null)
+        {
+            query = query.Where(client => client.Id != excludedClientId);
+        }
+
+        return await query
+            .Where(client =>
+                (normalizedPhone != null && client.Phone != null && client.Phone.ToLower() == normalizedPhone) ||
+                (normalizedEmail != null && client.Email != null && client.Email.ToLower() == normalizedEmail))
+            .OrderBy(client => client.FullName)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task AddAsync(Client client, CancellationToken cancellationToken = default)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         context.Clients.Add(client);
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task AddRangeAsync(IReadOnlyCollection<Client> clients, CancellationToken cancellationToken = default)
+    {
+        if (clients.Count == 0)
+        {
+            return;
+        }
+
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        await context.Clients.AddRangeAsync(clients, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task UpdateAsync(Client client, CancellationToken cancellationToken = default)
@@ -75,4 +117,7 @@ public sealed class ClientRepository(IDbContextFactory<ClientManagerDbContext> c
             throw new KeyNotFoundException("The client no longer exists.");
         }
     }
+
+    private static string? NormalizeComparisonValue(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToLowerInvariant();
 }

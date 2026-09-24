@@ -18,10 +18,14 @@ public sealed class ClientService(IClientRepository repository, TimeProvider tim
         return repository.SearchAsync(searchText?.Trim(), status, cancellationToken);
     }
 
-    public async Task<Client> CreateAsync(ClientInput input, CancellationToken cancellationToken = default)
+    public async Task<Client> CreateAsync(
+        ClientInput input,
+        bool allowPotentialDuplicates = false,
+        CancellationToken cancellationToken = default)
     {
         Validate(input);
         var normalizedInput = ClientInputNormalizer.Normalize(input);
+        await EnsureNoPotentialDuplicatesAsync(null, normalizedInput, allowPotentialDuplicates, cancellationToken);
         var now = timeProvider.GetUtcNow();
         var client = new Client
         {
@@ -42,6 +46,7 @@ public sealed class ClientService(IClientRepository repository, TimeProvider tim
     public async Task<Client> UpdateAsync(
         Guid id,
         ClientInput input,
+        bool allowPotentialDuplicates = false,
         CancellationToken cancellationToken = default)
     {
         Validate(input);
@@ -49,6 +54,7 @@ public sealed class ClientService(IClientRepository repository, TimeProvider tim
             ?? throw new KeyNotFoundException("The client no longer exists.");
 
         var normalizedInput = ClientInputNormalizer.Normalize(input);
+        await EnsureNoPotentialDuplicatesAsync(id, normalizedInput, allowPotentialDuplicates, cancellationToken);
         client.FullName = normalizedInput.FullName;
         client.Phone = normalizedInput.Phone;
         client.Email = normalizedInput.Email;
@@ -71,6 +77,28 @@ public sealed class ClientService(IClientRepository repository, TimeProvider tim
         if (errors.Count > 0)
         {
             throw new ClientValidationException(errors);
+        }
+    }
+
+    private async Task EnsureNoPotentialDuplicatesAsync(
+        Guid? excludedClientId,
+        ClientInput input,
+        bool allowPotentialDuplicates,
+        CancellationToken cancellationToken)
+    {
+        if (allowPotentialDuplicates || (input.Phone is null && input.Email is null))
+        {
+            return;
+        }
+
+        var potentialDuplicates = await repository.FindPotentialDuplicatesAsync(
+            excludedClientId,
+            input.Phone,
+            input.Email,
+            cancellationToken);
+        if (potentialDuplicates.Count > 0)
+        {
+            throw new ClientDuplicateException(potentialDuplicates);
         }
     }
 }

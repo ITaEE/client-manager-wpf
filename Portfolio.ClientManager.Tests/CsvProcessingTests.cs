@@ -138,6 +138,24 @@ public sealed class CsvProcessingTests
         Assert.Single(repository.Clients);
     }
 
+    [Fact]
+    public async Task ImportAsync_AddsValidatedRecordsAsSingleBatch()
+    {
+        var repository = new InMemoryClientRepository();
+        var service = new ClientImportService(repository, TimeProvider.System);
+        var records = new[]
+        {
+            new CsvImportRecord(2, new ClientInput("Ada Lovelace", null, "ada@example.com", ClientStatus.Active, null), Timestamp, Timestamp),
+            new CsvImportRecord(3, new ClientInput("Grace Hopper", null, "grace@example.com", ClientStatus.New, null), Timestamp, Timestamp)
+        };
+
+        var result = await service.ImportAsync(records);
+
+        Assert.Equal(2, result.ImportedCount);
+        Assert.Equal(1, repository.AddRangeCallCount);
+        Assert.Equal(2, repository.Clients.Count);
+    }
+
     private static Client CreateClient(string fullName, string? phone, string email, ClientStatus status, string? notes) =>
         new()
         {
@@ -155,6 +173,8 @@ public sealed class CsvProcessingTests
     {
         public List<Client> Clients { get; } = [.. clients];
 
+        public int AddRangeCallCount { get; private set; }
+
         public Task<int> CountAsync(CancellationToken cancellationToken = default) => Task.FromResult(Clients.Count);
 
         public Task<IReadOnlyList<Client>> SearchAsync(
@@ -166,9 +186,23 @@ public sealed class CsvProcessingTests
         public Task<Client?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult(Clients.SingleOrDefault(client => client.Id == id));
 
+        public Task<IReadOnlyList<Client>> FindPotentialDuplicatesAsync(
+            Guid? excludedClientId,
+            string? phone,
+            string? email,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Client>>([]);
+
         public Task AddAsync(Client client, CancellationToken cancellationToken = default)
         {
             Clients.Add(client);
+            return Task.CompletedTask;
+        }
+
+        public Task AddRangeAsync(IReadOnlyCollection<Client> clients, CancellationToken cancellationToken = default)
+        {
+            AddRangeCallCount++;
+            Clients.AddRange(clients);
             return Task.CompletedTask;
         }
 

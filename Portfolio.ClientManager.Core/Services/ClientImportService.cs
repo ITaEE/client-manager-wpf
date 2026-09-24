@@ -14,7 +14,7 @@ public sealed class ClientImportService(IClientRepository repository, TimeProvid
         var existingClients = await repository.SearchAsync(null, null, cancellationToken);
         var fingerprints = new HashSet<ClientFingerprint>(existingClients.Select(ClientFingerprint.From));
         var errors = new List<CsvImportError>();
-        var importedCount = 0;
+        var clientsToAdd = new List<Client>();
         var duplicateCount = 0;
 
         foreach (var record in records)
@@ -38,23 +38,21 @@ public sealed class ClientImportService(IClientRepository repository, TimeProvid
             var now = timeProvider.GetUtcNow();
             var createdAt = record.CreatedAt == default ? now : record.CreatedAt;
             var updatedAt = record.UpdatedAt < createdAt ? createdAt : record.UpdatedAt;
-            await repository.AddAsync(
-                new Client
-                {
-                    Id = Guid.NewGuid(),
-                    FullName = input.FullName,
-                    Phone = input.Phone,
-                    Email = input.Email,
-                    Status = input.Status,
-                    Notes = input.Notes,
-                    CreatedAt = createdAt,
-                    UpdatedAt = updatedAt
-                },
-                cancellationToken);
-            importedCount++;
+            clientsToAdd.Add(new Client
+            {
+                Id = Guid.NewGuid(),
+                FullName = input.FullName,
+                Phone = input.Phone,
+                Email = input.Email,
+                Status = input.Status,
+                Notes = input.Notes,
+                CreatedAt = createdAt,
+                UpdatedAt = updatedAt
+            });
         }
 
-        return new CsvImportResult(importedCount, duplicateCount, errors);
+        await repository.AddRangeAsync(clientsToAdd, cancellationToken);
+        return new CsvImportResult(clientsToAdd.Count, duplicateCount, errors);
     }
 
     private sealed record ClientFingerprint(

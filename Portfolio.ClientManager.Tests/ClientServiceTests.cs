@@ -79,6 +79,47 @@ public sealed class ClientServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_RejectsPhoneWithInvalidCharacters()
+    {
+        var service = CreateService(new InMemoryClientRepository());
+
+        var exception = await Assert.ThrowsAsync<ClientValidationException>(() =>
+            service.CreateAsync(new ClientInput("Grace Hopper", "call-me", null, ClientStatus.Active, null)));
+
+        Assert.Contains(nameof(ClientInput.Phone), exception.Errors.Keys);
+    }
+
+    [Fact]
+    public async Task CreateAsync_ReportsPotentialDuplicateByEmailUntilConfirmed()
+    {
+        var existing = CreateClient("Ada Lovelace", "+44 100", "ada@example.com", ClientStatus.Active);
+        var repository = new InMemoryClientRepository(existing);
+        var service = CreateService(repository);
+        var input = new ClientInput("Ada Byron", "+44 200", "ADA@EXAMPLE.COM", ClientStatus.New, null);
+
+        var exception = await Assert.ThrowsAsync<ClientDuplicateException>(() => service.CreateAsync(input));
+        Assert.Single(exception.PotentialDuplicates);
+        Assert.Single(repository.Clients);
+
+        await service.CreateAsync(input, allowPotentialDuplicates: true);
+        Assert.Equal(2, repository.Clients.Count);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ExcludesClientBeingEditedFromDuplicateCheck()
+    {
+        var client = CreateClient("Ada Lovelace", "+44 100", "ada@example.com", ClientStatus.Active);
+        var repository = new InMemoryClientRepository(client);
+        var service = CreateService(repository);
+
+        var updated = await service.UpdateAsync(
+            client.Id,
+            new ClientInput("Ada Lovelace", "+44 100", "ada@example.com", ClientStatus.Inactive, null));
+
+        Assert.Equal(ClientStatus.Inactive, updated.Status);
+    }
+
+    [Fact]
     public async Task SearchAsync_SearchesContactFieldsAndFiltersStatus()
     {
         var repository = new InMemoryClientRepository(
@@ -165,9 +206,29 @@ public sealed class ClientServiceTests
         public Task<Client?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult(Clients.SingleOrDefault(client => client.Id == id));
 
+        public Task<IReadOnlyList<Client>> FindPotentialDuplicatesAsync(
+            Guid? excludedClientId,
+            string? phone,
+            string? email,
+            CancellationToken cancellationToken = default)
+        {
+            var matches = Clients.Where(client =>
+                    client.Id != excludedClientId &&
+                    ((phone is not null && string.Equals(client.Phone, phone, StringComparison.OrdinalIgnoreCase)) ||
+                     (email is not null && string.Equals(client.Email, email, StringComparison.OrdinalIgnoreCase))))
+                .ToList();
+            return Task.FromResult<IReadOnlyList<Client>>(matches);
+        }
+
         public Task AddAsync(Client client, CancellationToken cancellationToken = default)
         {
             Clients.Add(client);
+            return Task.CompletedTask;
+        }
+
+        public Task AddRangeAsync(IReadOnlyCollection<Client> clients, CancellationToken cancellationToken = default)
+        {
+            Clients.AddRange(clients);
             return Task.CompletedTask;
         }
 

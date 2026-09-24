@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Threading;
+using System.IO;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Portfolio.ClientManager.App.Services;
 using Portfolio.ClientManager.App.ViewModels;
 using Portfolio.ClientManager.App.Views;
@@ -25,6 +27,7 @@ public partial class App : Application
             var services = new ServiceCollection();
             ConfigureServices(services);
             _serviceProvider = services.BuildServiceProvider();
+            _serviceProvider.GetRequiredService<ILogger<App>>().LogInformation("Application startup initiated.");
 
             await _serviceProvider.GetRequiredService<DatabaseInitializer>().InitializeAsync();
             var viewModel = _serviceProvider.GetRequiredService<MainViewModel>();
@@ -36,6 +39,7 @@ public partial class App : Application
         }
         catch (Exception exception)
         {
+            _serviceProvider?.GetService<ILogger<App>>()?.LogCritical(exception, "Application startup failed.");
             MessageBox.Show(
                 $"Client Manager could not start.\n\n{exception.Message}",
                 "Startup error",
@@ -54,6 +58,16 @@ public partial class App : Application
 
     private static void ConfigureServices(IServiceCollection services)
     {
+        var logDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Portfolio.ClientManager",
+            "logs");
+        services.AddLogging(builder =>
+        {
+            builder.ClearProviders();
+            builder.SetMinimumLevel(LogLevel.Information);
+            builder.AddProvider(new FileLoggerProvider(logDirectory));
+        });
         services.AddInfrastructure();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IClientService, ClientService>();
@@ -65,10 +79,11 @@ public partial class App : Application
         services.AddSingleton<MainWindow>();
     }
 
-    private static void OnDispatcherUnhandledException(
+    private void OnDispatcherUnhandledException(
         object sender,
         DispatcherUnhandledExceptionEventArgs e)
     {
+        _serviceProvider?.GetService<ILogger<App>>()?.LogCritical(e.Exception, "Unhandled UI exception.");
         MessageBox.Show(
             $"An unexpected error occurred.\n\n{e.Exception.Message}",
             "Client Manager",

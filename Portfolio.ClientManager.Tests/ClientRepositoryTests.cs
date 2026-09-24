@@ -73,6 +73,32 @@ public sealed class ClientRepositoryTests
         Assert.All(result, client => Assert.Equal(ClientStatus.Active, client.Status));
     }
 
+    [Fact]
+    public async Task FindPotentialDuplicatesAsync_MatchesPhoneOrEmailAndExcludesCurrentClient()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ClientManagerDbContext>().UseSqlite(connection).Options;
+        var factory = new TestDbContextFactory(options);
+        var ada = CreateClient("Ada Lovelace", "ada@example.com", ClientStatus.Active);
+        ada.Phone = "+44 100";
+        var grace = CreateClient("Grace Hopper", "grace@example.com", ClientStatus.New);
+        grace.Phone = "+1 200";
+
+        await using (var context = factory.CreateDbContext())
+        {
+            await context.Database.EnsureCreatedAsync();
+            context.Clients.AddRange(ada, grace);
+            await context.SaveChangesAsync();
+        }
+
+        var repository = new ClientRepository(factory);
+        var matches = await repository.FindPotentialDuplicatesAsync(ada.Id, "+1 200", "ADA@EXAMPLE.COM");
+
+        var match = Assert.Single(matches);
+        Assert.Equal(grace.Id, match.Id);
+    }
+
     private static Client CreateClient(string fullName, string email, ClientStatus status)
     {
         var now = DateTimeOffset.UtcNow;

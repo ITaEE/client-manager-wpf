@@ -35,3 +35,8 @@ Thumbs.db
 *.log
 *.tmp
 ~$*
+
+## Local secrets
+.env
+.env.local
+*.secrets.json

@@ -27,6 +27,13 @@ public static class ClientValidator
         {
             errors[nameof(input.Phone)] = $"Phone must be at most {PhoneMaxLength} characters.";
         }
+        else if (!string.IsNullOrWhiteSpace(input.Phone) && input.Phone.Any(character =>
+                     !char.IsDigit(character) &&
+                     !char.IsWhiteSpace(character) &&
+                     character is not '+' and not '-' and not '(' and not ')' and not '.' and not '/'))
+        {
+            errors[nameof(input.Phone)] = "Phone can contain digits, spaces, and common phone punctuation only.";
+        }
 
         var email = input.Email?.Trim();
         if (email?.Length > EmailMaxLength)

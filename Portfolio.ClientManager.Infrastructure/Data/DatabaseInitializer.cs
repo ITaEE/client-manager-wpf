@@ -8,5 +8,11 @@ public sealed class DatabaseInitializer(IDbContextFactory<ClientManagerDbContext
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         await context.Database.EnsureCreatedAsync(cancellationToken);
+        await context.Database.ExecuteSqlRawAsync(
+            "CREATE INDEX IF NOT EXISTS IX_Clients_Phone ON Clients (Phone);",
+            cancellationToken);
+        await context.Database.ExecuteSqlRawAsync(
+            "CREATE INDEX IF NOT EXISTS IX_Clients_Email ON Clients (Email);",
+            cancellationToken);
     }
 }

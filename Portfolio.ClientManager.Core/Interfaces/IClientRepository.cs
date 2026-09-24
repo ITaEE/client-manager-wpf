@@ -13,7 +13,15 @@ public interface IClientRepository
 
     Task<Client?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<Client>> FindPotentialDuplicatesAsync(
+        Guid? excludedClientId,
+        string? phone,
+        string? email,
+        CancellationToken cancellationToken = default);
+
     Task AddAsync(Client client, CancellationToken cancellationToken = default);
+
+    Task AddRangeAsync(IReadOnlyCollection<Client> clients, CancellationToken cancellationToken = default);
 
     Task UpdateAsync(Client client, CancellationToken cancellationToken = default);
 

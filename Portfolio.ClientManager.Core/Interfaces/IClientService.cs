@@ -11,9 +11,16 @@ public interface IClientService
         ClientStatus? status,
         CancellationToken cancellationToken = default);
 
-    Task<Client> CreateAsync(ClientInput input, CancellationToken cancellationToken = default);
+    Task<Client> CreateAsync(
+        ClientInput input,
+        bool allowPotentialDuplicates = false,
+        CancellationToken cancellationToken = default);
 
-    Task<Client> UpdateAsync(Guid id, ClientInput input, CancellationToken cancellationToken = default);
+    Task<Client> UpdateAsync(
+        Guid id,
+        ClientInput input,
+        bool allowPotentialDuplicates = false,
+        CancellationToken cancellationToken = default);
 
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }

@@ -22,5 +22,7 @@ public sealed class ClientManagerDbContext(DbContextOptions<ClientManagerDbConte
         client.Property(item => item.UpdatedAt).IsRequired();
         client.HasIndex(item => item.FullName);
         client.HasIndex(item => item.Status);
+        client.HasIndex(item => item.Phone);
+        client.HasIndex(item => item.Email);
     }
 }
